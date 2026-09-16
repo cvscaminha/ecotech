@@ -20,3 +20,5 @@ SECURE_HSTS_PRELOAD = True
 CSRF_TRUSTED_ORIGINS = [
     "https://ecotech-nsou.onrender.com",
 ]
+
+ALLOWED_HOSTS = [".onrender.com", "ecotech-nsou.onrender.com", '127.0.0.1', 'localhost']
