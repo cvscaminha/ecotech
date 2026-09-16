@@ -1,0 +1,1 @@
+EcoTech 1.5.36 - Campo Ativo convertido para checkbox na tela Nova Categoria.

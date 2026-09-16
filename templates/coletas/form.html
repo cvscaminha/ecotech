@@ -1,0 +1,43 @@
+{% extends 'base.html' %}{% block content %}<div class="page-heading"><div><h1>Solicitar Coleta</h1><p>Preencha as informações para agendar a coleta dos seus resíduos.</p></div></div><div class="two-column-form"><section class="eco-panel form-panel"><form method="post" id="collection-form">{% csrf_token %}{% for field in form %}{% if field.field.widget.input_type != 'hidden' %}<div class="mb-3"><label class="form-label">{{ field.label }}</label>{{ field }}{% for e in field.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}</div>{% else %}{{ field }}{% endif %}{% endfor %}<button class="btn btn-eco w-100 btn-lg"><i class="bi bi-calendar-check"></i> SOLICITAR COLETA</button></form><script>
+document.addEventListener('DOMContentLoaded', function(){
+ const cep=document.getElementById('id_cep');
+ if(cep){
+  cep.addEventListener('input', function(){ let x=this.value.replace(/\D/g,'').slice(0,8); this.value=x.length>5?x.slice(0,5)+'-'+x.slice(5):x; });
+  cep.addEventListener('blur', function(){
+   let v=this.value.replace(/\D/g,'');
+   if(v.length===8){
+    fetch('https://viacep.com.br/ws/'+v+'/json/')
+    .then(r=>r.json()).then(d=>{
+      if(!d.erro){
+       document.getElementById('id_address').value=d.logradouro||'';
+       document.getElementById('id_neighborhood').value=d.bairro||'';
+       document.getElementById('id_city').value=d.localidade||'';
+      }
+    });
+   }
+  });
+ }
+ if(navigator.geolocation){
+  navigator.geolocation.getCurrentPosition(function(p){
+   let lat=document.getElementById('id_latitude'), lon=document.getElementById('id_longitude');
+   if(lat) lat.value=p.coords.latitude;
+   if(lon) lon.value=p.coords.longitude;
+
+   fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat='+p.coords.latitude+'&lon='+p.coords.longitude+'&addressdetails=1')
+   .then(r=>r.json()).then(d=>{
+      let a=d.address || {};
+      let address=document.getElementById('id_address');
+      let bairro=document.getElementById('id_neighborhood');
+      let cidade=document.getElementById('id_city');
+      let cep=document.getElementById('id_cep');
+      let numero=document.getElementById('id_number');
+      if(address) address.value=a.road || '';
+      if(bairro) bairro.value=a.suburb || a.neighbourhood || '';
+      if(cidade) cidade.value=a.city || a.town || a.municipality || '';
+      if(cep && a.postcode) cep.value=a.postcode.replace(/\D/g,'').replace(/^(\d{5})(\d)/,'$1-$2');
+      if(numero) numero.value=a.house_number || '';
+   }).catch(()=>{});
+  });
+ }
+});
+</script></section><aside class="eco-panel process-panel"><h3>Como funciona?</h3><ol class="process-steps"><li><i class="bi bi-clipboard-check"></i><div><strong>Solicitação</strong><span>Você envia os dados da coleta.</span></div></li><li><i class="bi bi-truck"></i><div><strong>Análise</strong><span>A equipe verifica a viabilidade.</span></div></li><li><i class="bi bi-calendar3"></i><div><strong>Agendamento</strong><span>Data e período são confirmados.</span></div></li><li><i class="bi bi-recycle"></i><div><strong>Coleta</strong><span>O material recebe destinação responsável.</span></div></li></ol></aside></div>{% endblock %}

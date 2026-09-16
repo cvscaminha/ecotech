@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-heading"><div><h1>{% if point %}Editar{% else %}Novo{% endif %} Ponto de Entrega</h1><p>Informe os dados do ponto de entrega.</p></div></div>
+<div class="eco-panel form-panel narrow-panel">
+<form method="post" id="point-form">
+{% csrf_token %}
+<div class="row">
+{% for field in form %}
+{% if field.name != 'latitude' and field.name != 'longitude' and field.name != 'active' %}
+<div class="col-md-6 mb-3">{{ field.label_tag }}{{ field }}{{ field.errors }}</div>
+{% endif %}
+{% endfor %}
+</div>
+{{ form.latitude }}
+{{ form.longitude }}
+<div class="form-check mb-3">{{ form.active }} <label class="form-check-label" for="{{ form.active.id_for_label }}">Ativo</label></div>
+<button class="btn btn-eco">Salvar ponto</button>
+<a class="btn btn-outline-secondary" href="{% url 'pontos:manage' %}">Cancelar</a>
+</form>
+</div>
+<script>
+async function buscarCep(){
+ const cep=document.getElementById('id_cep').value.replace(/\D/g,'');
+ if(cep.length!==8)return;
+ const r=await fetch('https://viacep.com.br/ws/'+cep+'/json/');
+ const d=await r.json();
+ if(!d.erro){
+  document.getElementById('id_address').value=d.logradouro || '';
+  document.getElementById('id_neighborhood').value=d.bairro || '';
+  window.cidadeCep=d.localidade || ''; window.ufCep=d.uf || '';
+  buscarCoordenadas();
+ }
+}
+async function buscarCoordenadas(){
+ const address=[document.getElementById('id_address').value, document.getElementById('id_number').value, document.getElementById('id_neighborhood').value, window.cidadeCep, window.ufCep].filter(Boolean).join(', ');
+ if(!address)return;
+ const r=await fetch('https://nominatim.openstreetmap.org/search?format=json&q='+encodeURIComponent(address));
+ const d=await r.json();
+ if(d.length){
+  document.getElementById('id_latitude').value=d[0].lat;
+  document.getElementById('id_longitude').value=d[0].lon;
+ }
+}
+document.getElementById('id_phone')?.addEventListener('input',e=>{let v=e.target.value.replace(/\D/g,'').slice(0,11); if(v.length>6){v='('+v.slice(0,2)+') '+v.slice(2,7)+'-'+v.slice(7);} else if(v.length>2){v='('+v.slice(0,2)+') '+v.slice(2);} e.target.value=v;});
+document.getElementById('id_cep')?.addEventListener('input',e=>{let v=e.target.value.replace(/\D/g,'').slice(0,8); if(v.length>5)v=v.slice(0,5)+'-'+v.slice(5); e.target.value=v;});
+document.getElementById('id_cep')?.addEventListener('blur',buscarCep);
+['id_address','id_number','id_neighborhood'].forEach(id=>document.getElementById(id)?.addEventListener('blur',buscarCoordenadas));
+</script>
+{% endblock %}

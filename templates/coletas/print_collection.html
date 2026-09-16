@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html><head><title>Solicitação #{{ collection.pk }}</title>
+<style>body{font-family:Arial;margin:40px;color:#222}h1{color:#1b5e20}.box{border:1px solid #ddd;padding:20px;margin-top:20px}dt{font-weight:bold;margin-top:10px} .materials-block{margin:14px 0}.materials-block ul{margin:7px 0 0 20px;padding:0}.materials-block li{margin:4px 0}.material-qty{font-weight:normal;color:#444} @media print{button{display:none}}</style></head>
+<body>
+<h1>EcoTech - Solicitação de Coleta</h1>
+<div class="box">
+<h2>Solicitação #{{ collection.pk }}</h2>
+<p><b>Data:</b> {{ collection.created_at|date:'d/m/Y H:i' }}</p>
+<p><b>Status:</b> {{ collection.get_status_display }}</p>
+<div class="materials-block">
+<b>Materiais ({{ collection.wastes.count }}):</b>
+{% if collection.wastes.all %}
+<ul>
+{% for waste in collection.wastes.all %}
+<li><strong>{{ waste.equipment }}</strong>{% if waste.manufacturer %} - {{ waste.manufacturer }}{% endif %}{% if waste.model %} {{ waste.model }}{% endif %}{% if waste.quantity %} <span class="material-qty">(Qtd.: {{ waste.quantity }})</span>{% endif %}</li>
+{% endfor %}
+</ul>
+{% else %}
+<span>Nenhum resíduo associado.</span>
+{% endif %}
+</div>
+<dl>
+<dt>Endereço</dt><dd>{{ collection.address }} - {{ collection.city }}</dd>
+<dt>Data desejada</dt><dd>{{ collection.preferred_date|date:'d/m/Y'|default:'Não informada' }}</dd>
+<dt>Período</dt><dd>{{ collection.get_period_display }}</dd>
+<dt>Observações</dt><dd>{{ collection.notes|default:'Sem observações' }}</dd>
+{% if collection.responsible %}<dt>Responsável pela coleta</dt><dd>{{ collection.responsible.get_full_name|default:collection.responsible.username }}</dd>{% endif %}
+</dl>
+</div>
+<script>window.print()</script>
+</body></html>

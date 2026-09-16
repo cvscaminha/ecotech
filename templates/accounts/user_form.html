@@ -1,0 +1,184 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }} | EcoTech{% endblock %}
+{% block content %}
+<div class="page-heading admin-user-heading">
+  <div>
+    <h1>{{ title }}</h1>
+    <p>Cadastre o usuário e defina seu perfil de acesso à plataforma.</p>
+  </div>
+</div>
+
+<div class="eco-panel admin-user-panel">
+  <form method="post" id="admin-user-form" novalidate>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <div class="admin-user-grid">
+      {% for field in form %}
+        {% if field.name == 'address' %}
+          <div class="admin-user-field admin-user-span-2">
+        {% elif field.name == 'is_active' %}
+          <div class="admin-user-field admin-user-span-2 admin-user-check">
+        {% else %}
+          <div class="admin-user-field">
+        {% endif %}
+
+          {% if field.name == 'is_active' %}
+            <label class="admin-checkbox-label" for="{{ field.id_for_label }}">
+              {{ field }} <span>{{ field.label }}</span>
+            </label>
+            <small class="form-hint">Desmarque para impedir o acesso deste usuário sem excluir o cadastro.</small>
+          {% else %}
+            <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+
+            {% if field.name == 'password' %}
+              <div class="password-generator-row">
+                {{ field }}
+                <button type="button" class="btn btn-outline-success" id="btn-generate-password">
+                  <i class="bi bi-key"></i> Gerar senha
+                </button>
+              </div>
+              <small class="form-hint">A senha ficará visível para que o administrador possa repassá-la ao usuário.</small>
+            {% else %}
+              {{ field }}
+            {% endif %}
+          {% endif %}
+
+          {% for error in field.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+        </div>
+      {% endfor %}
+    </div>
+
+    <div class="admin-user-actions">
+      <button class="btn btn-eco" type="submit"><i class="bi bi-check-lg"></i> Salvar usuário</button>
+      <a class="btn btn-outline-secondary" href="{% url 'accounts:manage_users' %}">Cancelar</a>
+    </div>
+  </form>
+</div>
+
+<script>
+(function(){
+  const cep = document.getElementById('id_cep');
+  const address = document.getElementById('id_address');
+  const number = document.getElementById('id_number');
+  const neighborhood = document.getElementById('id_neighborhood');
+  const state = document.getElementById('id_state');
+  const city = document.getElementById('id_city');
+  const phone = document.getElementById('id_phone');
+  const documentField = document.getElementById('id_cpf_cnpj');
+  const password = document.getElementById('id_generated_password');
+  const generateBtn = document.getElementById('btn-generate-password');
+
+  function onlyDigits(value){ return (value || '').replace(/\D/g, ''); }
+
+  function maskCEP(value){
+    const d = onlyDigits(value).slice(0,8);
+    return d.length > 5 ? d.slice(0,5) + '-' + d.slice(5) : d;
+  }
+
+  function maskPhone(value){
+    const d = onlyDigits(value).slice(0,11);
+    if (d.length <= 2) return d ? '(' + d : '';
+    if (d.length <= 7) return '(' + d.slice(0,2) + ') ' + d.slice(2);
+    return '(' + d.slice(0,2) + ') ' + d.slice(2,7) + '-' + d.slice(7);
+  }
+
+  function maskDocument(value){
+    const d = onlyDigits(value).slice(0,14);
+    if (d.length <= 11){
+      return d
+        .replace(/^(\d{3})(\d)/, '$1.$2')
+        .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+        .replace(/\.(\d{3})(\d)/, '.$1-$2');
+    }
+    return d
+      .replace(/^(\d{2})(\d)/, '$1.$2')
+      .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+      .replace(/\.(\d{3})(\d)/, '.$1/$2')
+      .replace(/(\d{4})(\d)/, '$1-$2');
+  }
+
+  async function loadCities(uf, selectedCity=''){
+    city.innerHTML = '<option value="">Carregando cidades...</option>';
+    city.disabled = true;
+    if (!uf){
+      city.innerHTML = '<option value="">Selecione primeiro o estado</option>';
+      city.disabled = false;
+      return;
+    }
+    try{
+      const response = await fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${uf}/municipios?orderBy=nome`);
+      if (!response.ok) throw new Error('Falha ao consultar cidades');
+      const cities = await response.json();
+      city.innerHTML = '<option value="">Selecione a cidade</option>';
+      cities.forEach(item => {
+        const option = document.createElement('option');
+        option.value = item.nome;
+        option.textContent = item.nome;
+        if (selectedCity && item.nome.toLocaleLowerCase('pt-BR') === selectedCity.toLocaleLowerCase('pt-BR')) option.selected = true;
+        city.appendChild(option);
+      });
+    } catch(err){
+      city.innerHTML = '<option value="">Não foi possível carregar as cidades</option>';
+    } finally {
+      city.disabled = false;
+    }
+  }
+
+  async function lookupCEP(){
+    const digits = onlyDigits(cep.value);
+    if (digits.length !== 8) return;
+    try{
+      cep.classList.add('field-loading');
+      const response = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      if (!response.ok) throw new Error('CEP não encontrado');
+      const data = await response.json();
+      if (data.erro) throw new Error('CEP não encontrado');
+      if (data.logradouro) address.value = data.logradouro;
+      if (data.bairro) neighborhood.value = data.bairro;
+      if (data.uf){
+        state.value = data.uf;
+        await loadCities(data.uf, data.localidade || '');
+      }
+      // CEP não contém número do imóvel. Mantemos o campo para confirmação manual.
+      if (number && !number.value) number.focus();
+    } catch(err){
+      cep.setCustomValidity('CEP não encontrado. Verifique os dados informados.');
+      cep.reportValidity();
+      setTimeout(() => cep.setCustomValidity(''), 1800);
+    } finally {
+      cep.classList.remove('field-loading');
+    }
+  }
+
+  if (cep){
+    cep.addEventListener('input', () => cep.value = maskCEP(cep.value));
+    cep.addEventListener('blur', lookupCEP);
+  }
+  if (phone) phone.addEventListener('input', () => phone.value = maskPhone(phone.value));
+  if (documentField) documentField.addEventListener('input', () => documentField.value = maskDocument(documentField.value));
+  if (state) state.addEventListener('change', () => loadCities(state.value));
+
+  if (state && state.value){
+    loadCities(state.value, city?.dataset.currentCity || '');
+  }
+
+  if (generateBtn && password){
+    generateBtn.addEventListener('click', () => {
+      const upper='ABCDEFGHJKLMNPQRSTUVWXYZ', lower='abcdefghijkmnopqrstuvwxyz', nums='23456789', symbols='@#$%&*!';
+      const all=upper+lower+nums+symbols;
+      const randomChar = chars => chars[Math.floor(Math.random()*chars.length)];
+      let chars=[randomChar(upper), randomChar(lower), randomChar(nums), randomChar(symbols)];
+      while(chars.length < 12) chars.push(randomChar(all));
+      for(let i=chars.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [chars[i],chars[j]]=[chars[j],chars[i]]; }
+      password.value=chars.join('');
+      password.focus();
+      password.select();
+    });
+  }
+})();
+</script>
+{% endblock %}

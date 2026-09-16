@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard | EcoTech{% endblock %}
+{% block head %}<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div>
+    <h1>{% if user.is_admin_profile %}Painel Administrativo{% else %}Olá, {{ user.first_name|default:user.username }}! 👋{% endif %}</h1>
+    <p>{% if user.is_admin_profile %}Visão geral do sistema EcoTech.{% else %}Bem-vindo(a) à plataforma EcoTech.{% endif %}</p>
+  </div>
+  <a class="btn btn-eco" href="{% url 'residuos:create' %}"><i class="bi bi-plus-lg"></i> Cadastrar Resíduo</a>
+</div>
+
+<div class="metric-grid">
+  <div class="eco-metric"><i class="bi bi-recycle"></i><span>Resíduos cadastrados</span><strong>{{ total_wastes }}</strong><small>Registros</small></div>
+  <div class="eco-metric"><i class="bi bi-check-circle-fill"></i><span>Disponíveis</span><strong>{{ available_wastes }}</strong><small>Aguardando destinação</small></div>
+  <div class="eco-metric"><i class="bi bi-exclamation-triangle-fill"></i><span>Destinados</span><strong>{{ destinated_wastes }}</strong><small>Resíduos destinados</small></div>
+  <div class="eco-metric"><i class="bi bi-truck"></i><span>Coletas</span><strong>{{ total_collections }}</strong><small>{{ completed_collections }} concluídas</small></div>
+  <div class="eco-metric"><i class="bi bi-leaf"></i><span>Destinado corretamente</span><strong>{{ collected_weight }} kg</strong><small>Peso dos resíduos destinados</small></div>
+  <div class="eco-metric"><i class="bi bi-geo-alt-fill"></i><span>Pontos de entrega</span><strong>{{ total_points }}</strong><small>Ativos</small></div>
+  {% if admin_scope %}<div class="eco-metric"><i class="bi bi-people-fill"></i><span>Usuários</span><strong>{{ total_users }}</strong><small>{{ total_companies }} empresas</small></div>{% endif %}
+  {% if user.is_admin_profile %}<div class="eco-metric"><i class="bi bi-tags-fill"></i><span>Categorias ativas</span><strong>{{ active_categories }}</strong><small>{{ inactive_categories }} inativas</small></div>{% endif %}
+</div>
+
+<div class="quick-actions">
+  <h3>Ações rápidas</h3>
+  <div class="quick-grid">
+    <a href="{% url 'residuos:create' %}"><i class="bi bi-plus-circle-fill"></i><span>Cadastrar<br>Resíduo</span><i class="bi bi-arrow-right"></i></a>
+    <a href="{% url 'coletas:create' %}"><i class="bi bi-truck"></i><span>Solicitar<br>Coleta</span><i class="bi bi-arrow-right"></i></a>
+    <a href="{% url 'pontos:map' %}"><i class="bi bi-geo-alt-fill"></i><span>Ver Pontos de<br>Entrega</span><i class="bi bi-arrow-right"></i></a>
+  </div>
+</div>
+
+<div class="dashboard-grid">
+  <section class="eco-panel">
+    <div class="panel-title"><h3>Resumo do impacto ambiental</h3><a href="{% url 'dashboard:environmental' %}">Ver detalhes</a></div>
+    <div class="impact-row">
+      <div><i class="bi bi-leaf"></i><strong>{{ collected_weight }} kg</strong><span>de resíduos destinados</span></div>
+      <div><i class="bi bi-box-seam"></i><strong>{{ total_wastes }}</strong><span>equipamentos registrados</span></div>
+      <div><i class="bi bi-check-circle"></i><strong>{{ completed_collections }}</strong><span>coletas concluídas</span></div>
+    </div>
+    <div class="eco-tip"><i class="bi bi-leaf-fill"></i> Pequenas atitudes geram grandes transformações.</div>
+  </section>
+  <section class="eco-panel">
+    <div class="panel-title"><h3>Coletas recentes</h3><a href="{% url 'coletas:list' %}">Ver todas</a></div>
+    <div class="collection-list">
+      {% for c in recent_collections %}
+      <a href="{% url 'coletas:detail' c.pk %}"><div><strong>Solicitação #{{ c.pk }}</strong><small>{{ c.created_at|date:'d/m/Y' }} • {{ c.user }}</small></div><span class="status-pill status-{{ c.status|lower }}">{{ c.get_status_display }}</span><i class="bi bi-chevron-right"></i></a>
+      {% empty %}<p class="text-muted">Nenhuma coleta registrada.</p>{% endfor %}
+    </div>
+  </section>
+</div>
+
+<div class="dashboard-grid mt-4">
+  <section class="eco-panel">
+    <div class="panel-title"><h3>Resíduos recentes</h3><a href="{% url 'residuos:list' %}">Ver todos</a></div>
+    <div class="collection-list">
+      {% for w in recent_wastes %}
+      <a href="{% url 'residuos:detail' w.pk %}">
+        <div><strong>{{ w.equipment }}</strong><small>{{ w.category.name }} • {{ w.get_condition_display }} • {{ w.created_at|date:'d/m/Y' }}</small></div>
+        <span class="status-pill {% if w.status == 'DESTINADO' %}status-destinado{% else %}status-success{% endif %}">{{ w.get_status_display }}</span>
+        <i class="bi bi-chevron-right"></i>
+      </a>
+      {% empty %}<p class="text-muted">Nenhum resíduo cadastrado.</p>{% endfor %}
+    </div>
+  </section>
+  <section class="eco-panel">
+    <h3>Distribuição dos resíduos por status</h3>
+    <div class="chart-wrap"><canvas id="wasteStatusChart"></canvas><div id="wasteStatusFallback" class="chart-fallback"></div></div>
+  </section>
+</div>
+
+{% if user.is_admin_profile %}
+<div class="dashboard-grid mt-4">
+  <section class="eco-panel"><div class="panel-title"><h3>Atividade administrativa recente</h3><span class="text-muted">Histórico interno</span></div><div class="collection-list">{% for item in recent_audit %}<div class="py-2 border-bottom"><strong>{{ item.get_action_display|default:item.action }}</strong><br><small>{{ item.description }} • {{ item.user|default:'Sistema' }} • {{ item.created_at|date:'d/m/Y H:i' }}</small></div>{% empty %}<p class="text-muted">Nenhuma alteração administrativa registrada.</p>{% endfor %}</div></section>
+  <section class="eco-panel"><h3>Administração</h3><div class="d-grid gap-2 mt-3"><a class="btn btn-outline-success" href="{% url 'accounts:manage_users' %}"><i class="bi bi-people"></i> Gerenciar usuários</a><a class="btn btn-outline-success" href="{% url 'residuos:categories' %}"><i class="bi bi-tags"></i> Gerenciar categorias</a><a class="btn btn-outline-success" href="{% url 'coletas:manage' %}"><i class="bi bi-clipboard-check"></i> Gerenciar coletas</a><a class="btn btn-outline-success" href="{% url 'pontos:manage' %}"><i class="bi bi-pin-map"></i> Gerenciar pontos</a></div></section>
+</div>
+{% endif %}
+
+<div class="dashboard-grid mt-4">
+  <section class="eco-panel"><h3>Resíduos por categoria</h3><div class="chart-wrap"><canvas id="catChart"></canvas><div id="catFallback" class="chart-fallback"></div></div></section>
+  <section class="eco-panel"><h3>Solicitações de coleta por status</h3><div class="chart-wrap"><canvas id="statusChart"></canvas><div id="statusFallback" class="chart-fallback"></div></div></section>
+</div>
+
+{{ category_chart|json_script:"category-data" }}
+{{ status_chart|json_script:"status-data" }}
+{{ waste_status_chart|json_script:"waste-status-data" }}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const parseData = id => JSON.parse(document.getElementById(id).textContent);
+const c = parseData('category-data');
+const s = parseData('status-data');
+const ws = parseData('waste-status-data');
+function fallback(el, d) {
+  const max = Math.max(...d.data, 1);
+  el.innerHTML = d.labels.map((x, i) => `<div class="bar-row"><span>${x}</span><b style="width:${Math.max(8,(d.data[i]/max)*100)}%"></b><em>${d.data[i]}</em></div>`).join('');
+}
+if (window.Chart) {
+  new Chart(document.getElementById('catChart'), {type:'doughnut', data:{labels:c.labels,datasets:[{data:c.data}]}, options:{plugins:{legend:{position:'right'}}}});
+  new Chart(document.getElementById('statusChart'), {type:'bar', data:{labels:s.labels,datasets:[{label:'Solicitações',data:s.data}]}, options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+  new Chart(document.getElementById('wasteStatusChart'), {type:'doughnut', data:{labels:ws.labels,datasets:[{data:ws.data}]}, options:{plugins:{legend:{position:'right'}}}});
+  document.getElementById('catFallback').style.display='none';
+  document.getElementById('statusFallback').style.display='none';
+  document.getElementById('wasteStatusFallback').style.display='none';
+} else {
+  fallback(document.getElementById('catFallback'), c);
+  fallback(document.getElementById('statusFallback'), s);
+  fallback(document.getElementById('wasteStatusFallback'), ws);
+}
+</script>
+{% endblock %}

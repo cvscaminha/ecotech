@@ -1,0 +1,181 @@
+{% extends 'auth_base.html' %}
+{% block title %}Cadastro | EcoTech{% endblock %}
+{% block content %}
+<div class="auth-card auth-card-wide">
+<h2>Criar cadastro</h2>
+<p class="text-muted">Preencha seus dados para participar da plataforma EcoTech.</p>
+<form method="post">{% csrf_token %}
+<div class="row">
+{% for field in form %}
+<div class="col-md-6 mb-3">
+<label class="form-label">{{ field.label }}{% if field.field.required %} <span class="required">*</span>{% endif %}</label>
+<div class="position-relative">
+{{ field }}
+{% if field.name == 'address' %}<button type="button" class="gps-button" id="gps-address">📍 Usar minha localização</button>{% endif %}
+{% if field.name == 'password1' or field.name == 'password2' %}
+<button type="button" class="password-toggle" data-target="{{ field.id_for_label }}" aria-label="Mostrar senha">👁</button>
+{% endif %}
+</div>
+{% if field.help_text %}<div class="form-text small">{{ field.help_text }}</div>{% endif %}
+{% for e in field.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+</div>
+{% endfor %}
+</div>
+<button class="btn btn-eco btn-lg">Criar conta</button>
+<a class="btn btn-link" href="{% url 'accounts:login' %}">Já tenho conta</a>
+</form>
+</div>
+<style>
+.position-relative input{padding-right:45px}
+.password-toggle{position:absolute;right:10px;top:50%;transform:translateY(-50%);border:0;background:none;cursor:pointer}
+</style>
+<script>
+(function(){
+  const onlyDigits = (v) => (v || '').replace(/\D/g, '');
+
+  function formatPhone(value){
+    const d = onlyDigits(value).slice(0, 11);
+    if (d.length <= 2) return d ? `(${d}` : '';
+    if (d.length <= 7) return `(${d.slice(0,2)}) ${d.slice(2)}`;
+    if (d.length === 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`;
+    return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
+  }
+
+  function formatDocument(value){
+    let d = onlyDigits(value).slice(0, 14);
+    if (d.length <= 11){
+      d = d.replace(/^(\d{3})(\d)/, '$1.$2')
+           .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+           .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+      return d;
+    }
+    return d.replace(/^(\d{2})(\d)/, '$1.$2')
+            .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+            .replace(/^(\d{2})\.(\d{3})\.(\d{3})(\d)/, '$1.$2.$3/$4')
+            .replace(/(\d{4})(\d{1,2})$/, '$1-$2');
+  }
+
+  function formatCep(value){
+    const d = onlyDigits(value).slice(0,8);
+    return d.length > 5 ? `${d.slice(0,5)}-${d.slice(5)}` : d;
+  }
+
+  document.querySelectorAll('.password-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const input = document.getElementById(btn.dataset.target);
+      if (!input) return;
+      input.type = input.type === 'password' ? 'text' : 'password';
+      btn.textContent = input.type === 'password' ? '👁' : '🙈';
+    });
+  });
+
+  const phone = document.getElementById('id_phone');
+  if (phone){
+    phone.value = formatPhone(phone.value);
+    phone.addEventListener('input', e => e.target.value = formatPhone(e.target.value));
+  }
+
+  const cpf = document.getElementById('id_cpf_cnpj');
+  if (cpf){
+    cpf.value = formatDocument(cpf.value);
+    cpf.addEventListener('input', e => e.target.value = formatDocument(e.target.value));
+  }
+
+  const cep = document.getElementById('id_cep');
+  const uf = document.getElementById('id_state');
+  const city = document.getElementById('id_city');
+  const address = document.getElementById('id_address');
+  const neighborhood = document.getElementById('id_neighborhood');
+
+  if (cep){
+    cep.value = formatCep(cep.value);
+    cep.addEventListener('input', e => e.target.value = formatCep(e.target.value));
+  }
+
+  async function loadCities(ufCode, selectedCity=''){
+    if (!city) return;
+    city.disabled = true;
+    city.innerHTML = '<option value="">Carregando cidades...</option>';
+    if (!ufCode){
+      city.innerHTML = '<option value="">Selecione o estado primeiro</option>';
+      city.disabled = false;
+      return;
+    }
+    try{
+      const response = await fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${encodeURIComponent(ufCode)}/municipios?orderBy=nome`);
+      if (!response.ok) throw new Error('Falha ao consultar municípios');
+      const data = await response.json();
+      city.innerHTML = '<option value="">Selecione a cidade</option>';
+      data.forEach(item => {
+        const option = document.createElement('option');
+        option.value = item.nome;
+        option.textContent = item.nome;
+        if (selectedCity && item.nome.localeCompare(selectedCity, 'pt-BR', {sensitivity:'base'}) === 0){
+          option.selected = true;
+        }
+        city.appendChild(option);
+      });
+      // Fallback: se o município veio do ViaCEP mas não coincidiu por grafia,
+      // mantenha-o como opção válida em vez de deixar o formulário impossível de enviar.
+      if (selectedCity && city.value === ''){
+        const option = document.createElement('option');
+        option.value = selectedCity;
+        option.textContent = selectedCity;
+        option.selected = true;
+        city.appendChild(option);
+      }
+    } catch(err){
+      city.innerHTML = '<option value="">Não foi possível carregar as cidades</option>';
+      if (selectedCity){
+        const option = document.createElement('option');
+        option.value = selectedCity;
+        option.textContent = selectedCity;
+        option.selected = true;
+        city.appendChild(option);
+      }
+    } finally {
+      city.disabled = false;
+    }
+  }
+
+  if (uf && city){
+    uf.addEventListener('change', () => loadCities(uf.value, ''));
+    const currentCity = city.value || '';
+    if (uf.value) loadCities(uf.value, currentCity);
+  }
+
+  async function lookupCep(){
+    if (!cep) return;
+    const digits = onlyDigits(cep.value);
+    if (digits.length !== 8) return;
+    cep.value = formatCep(digits);
+    try{
+      const response = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      if (!response.ok) return;
+      const data = await response.json();
+      if (data.erro) return;
+      if (address) address.value = data.logradouro || '';
+      if (neighborhood) neighborhood.value = data.bairro || '';
+      if (uf && data.uf){
+        uf.value = data.uf;
+        await loadCities(data.uf, data.localidade || '');
+      }
+    } catch(err){ /* usuário pode preencher manualmente */ }
+  }
+  if (cep) cep.addEventListener('blur', lookupCep);
+
+  const gpsButton = document.getElementById('gps-address');
+  if (gpsButton){
+    gpsButton.addEventListener('click', () => {
+      if (!navigator.geolocation){ alert('GPS não disponível neste navegador.'); return; }
+      navigator.geolocation.getCurrentPosition(pos => {
+        if (address) address.value = `Latitude: ${pos.coords.latitude.toFixed(6)}, Longitude: ${pos.coords.longitude.toFixed(6)}`;
+      }, () => alert('Não foi possível obter sua localização. Permita o acesso ao GPS.'));
+    });
+  }
+})();
+</script>
+<style>
+.required{color:#198754;font-weight:bold}.gps-button{border:0;background:#eef7e9;color:#237a2a;padding:8px 12px;border-radius:8px;margin-top:8px;font-size:.85rem;cursor:pointer}
+</style>
+{% endblock %}
